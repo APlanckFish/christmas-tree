@@ -20,7 +20,7 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# 安装依赖（生产环境也需要 tsx 来运行 TypeScript）
+# 安装依赖（生产环境需要 tsx 来运行 TypeScript）
 COPY package*.json ./
 RUN npm ci && npm cache clean --force
 
@@ -28,7 +28,6 @@ RUN npm ci && npm cache clean --force
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/server.ts ./
-COPY --from=builder /app/tsconfig.json ./
 
 # 创建证书目录（用于挂载服务器证书）
 RUN mkdir -p /app/certs
@@ -45,6 +44,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8080', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# 启动应用（生产环境使用 tsx 运行 TypeScript）
-CMD ["node", "--loader", "tsx/esm", "server.ts"]
+# 启动应用（使用 tsx 直接运行 TypeScript）
+CMD ["node", "--import", "tsx/esm", "server.ts"]
 

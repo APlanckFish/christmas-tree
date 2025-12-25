@@ -54,10 +54,68 @@ if (fs.existsSync(clientBuildPath)) {
 
 // 创建 React Router 请求处理器 (纯 React Router v7，无 Express!)
 // createRequestListener 会自动处理静态资源（build/client 目录）
-const requestListener = createRequestListener({
+const reactRouterHandler = createRequestListener({
   build,
   mode: MODE,
 });
+
+// 手动处理静态资源请求（在 React Router 处理之前）
+// 因为 React Router 可能会将 /assets/ 路径匹配到 catch-all 路由
+const requestListener: http.RequestListener = (req, res) => {
+  const url = req.url || "/";
+
+  // 处理静态资源请求（/assets/ 和 /public/）
+  if (url.startsWith("/assets/") || url.startsWith("/public/")) {
+    const filePath = url.startsWith("/assets/")
+      ? path.join(clientBuildPath, url)
+      : path.join(__dirname, "./public", url.replace("/public/", ""));
+
+    // 检查文件是否存在
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        ".js": "application/javascript",
+        ".mjs": "application/javascript",
+        ".css": "text/css",
+        ".json": "application/json",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".svg": "image/svg+xml",
+        ".woff": "font/woff",
+        ".woff2": "font/woff2",
+        ".ttf": "font/ttf",
+        ".mp3": "audio/mpeg",
+        ".mp4": "video/mp4",
+      };
+
+      const contentType = mimeTypes[ext] || "application/octet-stream";
+
+      try {
+        const fileContent = fs.readFileSync(filePath);
+        res.writeHead(200, {
+          "Content-Type": contentType,
+          "Content-Length": fileContent.length,
+          "Cache-Control": "public, max-age=31536000, immutable",
+        });
+        res.end(fileContent);
+        return;
+      } catch (error) {
+        console.error(`❌ Error reading static file ${filePath}:`, error);
+        res.writeHead(500);
+        res.end("Internal Server Error");
+        return;
+      }
+    } else {
+      // 文件不存在，继续交给 React Router 处理（可能会返回 404）
+      console.warn(`⚠️  Static file not found: ${filePath}`);
+    }
+  }
+
+  // 其他请求交给 React Router 处理
+  return reactRouterHandler(req, res);
+};
 
 // HTTPS 配置：支持使用服务器证书
 // 如果环境变量 SSL_KEY_PATH 和 SSL_CERT_PATH 为空，则不启用 HTTPS（由 Nginx 处理）

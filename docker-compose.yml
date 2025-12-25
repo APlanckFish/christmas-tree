@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  christmas-tree:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: christmas-tree
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - WS_PORT=8080
+      # 证书路径（挂载到容器内）
+      - SSL_KEY_PATH=/app/certs/key.pem
+      - SSL_CERT_PATH=/app/certs/cert.pem
+      # 如果使用 Let's Encrypt 证书
+      # - SSL_KEY_PATH=/app/certs/privkey.pem
+      # - SSL_CERT_PATH=/app/certs/fullchain.pem
+    volumes:
+      # 挂载服务器证书（请根据实际情况修改路径）
+      - /path/to/your/certs:/app/certs:ro
+      # 示例：如果使用 Let's Encrypt
+      # - /etc/letsencrypt/live/yourdomain.com:/app/certs:ro
+    networks:
+      - christmas-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+networks:
+  christmas-network:
+    driver: bridge
+

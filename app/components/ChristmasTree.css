@@ -1,0 +1,64 @@
+.christmas-tree-container {
+  width: 100vw;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  background: #000;
+}
+
+.christmas-tree-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.tree-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: fadeOut 0.8s ease-out 0.5s forwards;
+}
+
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.tree-loader-text {
+  color: #d4af37;
+  font-size: 14px;
+  letter-spacing: 4px;
+  margin-top: 20px;
+  text-transform: uppercase;
+  font-weight: 100;
+  font-family: 'Cinzel', 'Times New Roman', serif;
+}
+
+.tree-spinner {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-top: 1px solid #d4af37;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

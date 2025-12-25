@@ -92,11 +92,23 @@ export default function PhoneCamera() {
     }
     
     // 端口配置：从环境变量读取，开发者配置
-    const wsPort = import.meta.env.VITE_WS_PORT || (isDev ? "8081" : (window.location.port || "8080"));
+    const isDev = import.meta.env.DEV;
+    const isProduction = !isDev && window.location.protocol === "https:";
     
-    const wsUrl = `${protocol}://${host}:${wsPort}/ws?room=${roomId}`;
+    // 如果是生产环境（HTTPS），通过 Nginx 反向代理，不需要端口号
+    // 如果是开发环境或 HTTP，需要端口号
+    const wsPort = isProduction 
+      ? "" 
+      : (import.meta.env.VITE_WS_PORT || (isDev ? "8081" : (window.location.port || "8080")));
+    
+    // 生产环境：wss://domain.com/ws
+    // 开发环境：ws://ip:port/ws
+    const wsUrl = wsPort 
+      ? `${protocol}://${host}:${wsPort}/ws?room=${roomId}`
+      : `${protocol}://${host}/ws?room=${roomId}`;
     console.log('[Phone Camera] Connecting to WebSocket:', wsUrl);
-    console.log('[Phone Camera] Hostname:', host, 'Port:', wsPort, 'Protocol:', protocol);
+    console.log('[Phone Camera] Hostname:', host, 'Port:', wsPort || 'none (via Nginx)', 'Protocol:', protocol);
+    console.log('[Phone Camera] Production mode:', isProduction);
     
     try {
       const ws = new WebSocket(wsUrl);

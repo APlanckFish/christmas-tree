@@ -41,40 +41,51 @@ export default function Home() {
     videoReady // 视频准备好时启用 MediaPipe（无论是本地还是远程摄像头）
   );
 
-  // 自动检测本机 IP
+  // 自动检测服务器地址（优先使用当前访问的域名）
   useEffect(() => {
-    async function detectLocalIP() {
+    async function detectServerAddress() {
       try {
-        // 使用 RTCPeerConnection 获取本地 IP
-        const pc = new RTCPeerConnection({
-          iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-        });
+        // 优先使用当前访问的域名（生产环境）
+        const currentHost = window.location.hostname;
+        const isLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1';
         
-        pc.createDataChannel("");
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        
-        const localIP = await new Promise<string>((resolve) => {
-          pc.onicecandidate = (event) => {
-            if (event.candidate) {
-              const candidate = event.candidate.candidate;
-              const ipMatch = candidate.match(/(\d{1,3}\.){3}\d{1,3}/);
-              if (ipMatch && !ipMatch[0].startsWith("127.")) {
-                resolve(ipMatch[0]);
-                pc.close();
-              }
-            }
-          };
+        // 如果是 localhost，才尝试检测局域网 IP（开发环境）
+        if (isLocalhost) {
+          // 使用 RTCPeerConnection 获取本地 IP
+          const pc = new RTCPeerConnection({
+            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+          });
           
-          // 超时后使用 hostname
-          setTimeout(() => {
-            resolve(window.location.hostname);
-            pc.close();
-          }, 2000);
-        });
-        
-        console.log('[IP Detection] Detected local IP:', localIP);
-        setDetectedIP(localIP);
+          pc.createDataChannel("");
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          
+          const localIP = await new Promise<string>((resolve) => {
+            pc.onicecandidate = (event) => {
+              if (event.candidate) {
+                const candidate = event.candidate.candidate;
+                const ipMatch = candidate.match(/(\d{1,3}\.){3}\d{1,3}/);
+                if (ipMatch && !ipMatch[0].startsWith("127.")) {
+                  resolve(ipMatch[0]);
+                  pc.close();
+                }
+              }
+            };
+            
+            // 超时后使用 hostname
+            setTimeout(() => {
+              resolve(currentHost);
+              pc.close();
+            }, 2000);
+          });
+          
+          console.log('[IP Detection] Detected local IP:', localIP);
+          setDetectedIP(localIP);
+        } else {
+          // 生产环境：使用当前域名
+          console.log('[IP Detection] Using current domain:', currentHost);
+          setDetectedIP(currentHost);
+        }
         
         // 加载保存的 IP
         const savedIP = localStorage.getItem('christmas-tree-server-ip');
@@ -87,7 +98,7 @@ export default function Home() {
       }
     }
     
-    detectLocalIP();
+    detectServerAddress();
     startLocalCamera();
     
     // 背景音乐
@@ -130,19 +141,24 @@ export default function Home() {
         console.warn('[QRCode] Using localhost, phone may not be able to access. Please configure server IP.');
       }
       
-      // 使用当前页面的端口，或环境变量配置的端口
-      const currentPort = window.location.port;
-      const envPort = import.meta.env.VITE_HTTP_PORT;
-      const httpPort = currentPort || envPort || (window.location.protocol === 'https:' ? '443' : '8080');
-      const protocol = window.location.protocol;
+      // 端口配置：从环境变量读取，开发者配置
+      const isDev = import.meta.env.DEV;
+      const isProduction = !isDev && window.location.protocol === "https:";
       
-      // 构建完整的URL - 始终包含端口（除非是标准端口）
+      // 如果是生产环境（HTTPS），通过 Nginx 反向代理，不需要端口号
+      // 如果是开发环境或 HTTP，需要端口号
+      const httpPort = isProduction 
+        ? "" 
+        : (window.location.port || import.meta.env.VITE_HTTP_PORT || "8080");
+      const protocol = window.location.protocol === "https:" ? "https" : "http";
+      
+      // 构建完整的URL
       // 同时传递服务器IP给手机端，用于WebSocket连接
       let qrUrl: string;
-      if (httpPort && httpPort !== '443' && httpPort !== '80') {
-        qrUrl = `${protocol}//${ip}:${httpPort}/phone-camera?room=${roomId}&server=${ip}`;
+      if (httpPort) {
+        qrUrl = `${protocol}://${ip}:${httpPort}/phone-camera?room=${roomId}&server=${ip}`;
       } else {
-        qrUrl = `${protocol}//${ip}/phone-camera?room=${roomId}&server=${ip}`;
+        qrUrl = `${protocol}://${ip}/phone-camera?room=${roomId}&server=${ip}`;
       }
       
       console.log('[QRCode] Generating QR code for:', qrUrl);
@@ -231,22 +247,41 @@ export default function Home() {
 
     const ip = serverIP.trim() || detectedIP || window.location.hostname;
     
-    // 端口配置：从环境变量读取，开发者配置
-    const isDev = import.meta.env.DEV;
-    const wsPort = import.meta.env.VITE_WS_PORT || (isDev ? "8081" : (window.location.port || "8080"));
-    const httpPort = window.location.port || import.meta.env.VITE_HTTP_PORT || "8080";
-    
     // WebSocket 协议：根据页面协议选择（HTTPS 页面必须使用 WSS）
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    
+    // 端口配置：从环境变量读取，开发者配置
+    const isDev = import.meta.env.DEV;
+    const isProduction = !isDev && window.location.protocol === "https:";
+    
+    // 如果是生产环境（HTTPS），通过 Nginx 反向代理，不需要端口号
+    // 如果是开发环境或 HTTP，需要端口号
+    let wsPort = "";
+    let httpPort = "";
+    
+    if (isProduction) {
+      // 生产环境：通过 Nginx，不包含端口
+      wsPort = "";
+      httpPort = "";
+    } else {
+      // 开发环境：需要端口
+      wsPort = import.meta.env.VITE_WS_PORT || (isDev ? "8081" : (window.location.port || "8080"));
+      httpPort = window.location.port || import.meta.env.VITE_HTTP_PORT || "8080";
+    }
 
     console.log('[Connection] Using IP:', ip);
-    console.log('[Connection] WebSocket port:', wsPort);
-    console.log('[Connection] HTTP port:', httpPort);
+    console.log('[Connection] WebSocket port:', wsPort || 'none (via Nginx)');
+    console.log('[Connection] HTTP port:', httpPort || 'none (via Nginx)');
     console.log('[Connection] Protocol:', protocol);
+    console.log('[Connection] Production mode:', isProduction);
 
     try {
       // 连接 WebSocket
-      const wsUrl = `${protocol}://${ip}:${wsPort}/ws?room=${roomId}`;
+      // 生产环境：wss://domain.com/ws
+      // 开发环境：ws://ip:port/ws
+      const wsUrl = wsPort 
+        ? `${protocol}://${ip}:${wsPort}/ws?room=${roomId}`
+        : `${protocol}://${ip}/ws?room=${roomId}`;
       console.log('[Connection] Connecting to WebSocket:', wsUrl);
       
       // 创建 WebSocket 连接

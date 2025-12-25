@@ -25,9 +25,15 @@ COPY package*.json ./
 RUN npm ci && npm cache clean --force
 
 # 从构建阶段复制构建产物
+# 注意：必须复制整个 build 目录（包含 build/client 和 build/server）
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/server.ts ./
+
+# 验证构建产物（调试用，生产环境可删除）
+RUN ls -la /app/build/ && \
+    ls -la /app/build/client/ 2>/dev/null || echo "⚠️  build/client not found" && \
+    ls -la /app/build/server/ 2>/dev/null || echo "⚠️  build/server not found"
 
 # 创建证书目录（用于挂载服务器证书）
 RUN mkdir -p /app/certs

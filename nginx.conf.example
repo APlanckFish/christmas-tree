@@ -82,6 +82,9 @@ server {
         # 缓冲设置
         proxy_buffering off;
         proxy_request_buffering off;
+        
+        # 重要：不要覆盖 Content-Type，让后端服务器设置正确的 MIME 类型
+        # React Router 会自动设置正确的 MIME 类型
     }
 }
 

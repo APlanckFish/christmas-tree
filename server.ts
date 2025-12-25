@@ -11,15 +11,49 @@ import * as http from "http";
 import * as https from "https";
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+// ES 模块中获取 __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const MODE =
   process.env.NODE_ENV === "production" ? "production" : "development";
-const BUILD_PATH = "./build/server/index.js";
+const BUILD_PATH = path.resolve(__dirname, "./build/server/index.js");
+
+// 检查构建文件是否存在
+if (!fs.existsSync(BUILD_PATH)) {
+  console.error(`❌ Build file not found: ${BUILD_PATH}`);
+  console.error(`   Current directory: ${__dirname}`);
+  console.error(
+    `   Build directory exists: ${fs.existsSync(path.resolve(__dirname, "./build"))}`
+  );
+  if (fs.existsSync(path.resolve(__dirname, "./build"))) {
+    const buildContents = fs.readdirSync(path.resolve(__dirname, "./build"));
+    console.error(`   Build directory contents: ${buildContents.join(", ")}`);
+  }
+  process.exit(1);
+}
 
 // 动态导入构建文件
 const build = (await import(BUILD_PATH)) as ServerBuild;
+console.log(`✅ Loaded build from: ${BUILD_PATH}`);
+
+// 检查静态资源目录
+const clientBuildPath = path.resolve(__dirname, "./build/client");
+if (fs.existsSync(clientBuildPath)) {
+  const clientFiles = fs.readdirSync(clientBuildPath);
+  console.log(`✅ Client build directory exists: ${clientBuildPath}`);
+  console.log(
+    `   Client files: ${clientFiles.slice(0, 5).join(", ")}${clientFiles.length > 5 ? "..." : ""}`
+  );
+} else {
+  console.warn(`⚠️  Client build directory not found: ${clientBuildPath}`);
+}
 
 // 创建 React Router 请求处理器 (纯 React Router v7，无 Express!)
+// createRequestListener 会自动处理静态资源（build/client 目录）
 const requestListener = createRequestListener({
   build,
   mode: MODE,

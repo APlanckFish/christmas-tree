@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   christmas-tree:
@@ -8,11 +8,14 @@ services:
     container_name: christmas-tree
     restart: unless-stopped
     # 只监听本地，由 Nginx 反向代理
+    # 容器内端口 8080 映射到宿主机 8888
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8888:8080"
     environment:
       - NODE_ENV=production
       - PORT=8080
+      # WS_PORT 在生产环境中不需要（WebSocket 和 HTTP 共享同一端口）
+      # 保留它只是为了兼容性，实际不会被使用
       - WS_PORT=8080
       # 不使用容器内证书，由 Nginx 处理 SSL
       - SSL_KEY_PATH=
@@ -20,7 +23,13 @@ services:
     networks:
       - christmas-network
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:8080', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})",
+        ]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -29,4 +38,3 @@ services:
 networks:
   christmas-network:
     driver: bridge
-
